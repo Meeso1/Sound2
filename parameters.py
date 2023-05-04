@@ -8,7 +8,7 @@ class Parameters:
         self.cached_sound_name = None
         self.cached_volume = None
 
-    def volume(self, sound):
+    def volume(self, sound: Sound):
         if not sound.path == self.cached_sound_name:
             self.cached_sound_name = sound.path
             self.cached_volume = self.calculate_volume(sound)

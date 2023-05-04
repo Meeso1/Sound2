@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, \
-    QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, \
+    QSizePolicy, QSplitter, QComboBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.widgets import SpanSelector
@@ -15,33 +15,66 @@ class MainWindow(QMainWindow):
 
         self.sound = self.load_file("PinkPanther.wav")
         self.parameters = Parameters()
-        self.sound_axis, self.sound_canvas, sound_hbox, self.sound_selector = self.create_sound_box()
+        self.combobox_items = self.create_combobox_parameters_dict()
+
+        self.sound_selector = None
+
+        self.sound_axis, self.sound_canvas, sound_hbox = self.create_sound_box()
         self.parameter_axis, self.parameter_canvas = self.create_parameter_plot()
+
+        self.sound_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.parameter_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         vbox_left = QVBoxLayout()
         vbox_right = QVBoxLayout()
         hbox_buttons = QHBoxLayout()
-        hbox_parameters = QHBoxLayout()
+        hbox_parameters, self.parameter_selector = self.create_parameter_controls()
 
         hbox_buttons.addWidget(self.create_reset_button())
         hbox_buttons.addWidget(self.create_play_button())
         hbox_buttons.addWidget(self.create_open_file_button())
 
         vbox_left.addLayout(sound_hbox)
-        vbox_left.addLayout(hbox_buttons)
+
+        # Wrap hbox_buttons in a QWidget and set a fixed height
+        buttons_widget = QWidget()
+        buttons_widget.setLayout(hbox_buttons)
+        buttons_widget.setFixedHeight(100)
+        vbox_left.addWidget(buttons_widget)
 
         vbox_right.addWidget(self.parameter_canvas)
-        vbox_left.addLayout(hbox_parameters)
 
-        hbox_root = QHBoxLayout()
-        hbox_root.addLayout(vbox_left)
-        hbox_root.addLayout(vbox_right)
-        hbox_root.addStretch(1)
+        # Wrap hbox_parameters in a QWidget and set a fixed height
+        parameters_widget = QWidget()
+        parameters_widget.setLayout(hbox_parameters)
+        parameters_widget.setFixedHeight(100)
+        vbox_right.addWidget(parameters_widget)
 
-        central_widget = QWidget()
-        central_widget.setLayout(hbox_root)
-        self.setCentralWidget(central_widget)
-        self.on_select(0, self.sound.n_frames)
+        # Wrap the left and right sections in QWidget
+        left_section = QWidget()
+        left_section.setLayout(vbox_left)
+        right_section = QWidget()
+        right_section.setLayout(vbox_right)
+
+        # Set the size policy for the sections
+        left_section.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        right_section.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+
+        # Use a QSplitter to separate the two sections
+        splitter = QSplitter()
+        splitter.addWidget(left_section)
+        splitter.addWidget(right_section)
+
+        self.setCentralWidget(splitter)
+        self.on_select(0, self.sound.duration)
+
+    def create_combobox_parameters_dict(self):
+        parameters = {
+            "Volume": lambda: self.draw_parameter_plot(self.parameters.volume(self.sound), "Relative volume"),
+            "Negative volume": lambda: self.draw_parameter_plot(1-self.parameters.volume(self.sound), "Negative volume")
+        }
+
+        return parameters
 
     def create_sound_box(self):
         figure = Figure(figsize=(5, 4), dpi=100)
@@ -66,7 +99,10 @@ class MainWindow(QMainWindow):
 
         for i in range(hbox.count()):
             hbox.itemAt(i).widget().setFixedHeight(400)
-        return axis, canvas, hbox, selector
+
+        # We need to keep the selector somewhere
+        self.sound_selector = selector
+        return axis, canvas, hbox
 
     @staticmethod
     def create_parameter_plot():
@@ -78,8 +114,8 @@ class MainWindow(QMainWindow):
     def select_file(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        filename, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
-                                                  "All Files (*);;Python Files (*.py)", options=options)
+        filename, _ = QFileDialog.getOpenFileName(self, "Select file to analyze", "",
+                                                  "Sound Files (*.wav);;All Files (*)", options=options)
         if filename:
             self.load_file(filename)
             self.reset_plots()
@@ -99,6 +135,64 @@ class MainWindow(QMainWindow):
         reset_button.clicked.connect(self.reset_plots)
         return reset_button
 
+    def create_parameter_controls(self):
+        hbox = QHBoxLayout()
+
+        prev_parameter_button = self.create_prev_parameter_button()
+        hbox.addWidget(prev_parameter_button)
+
+        parameter_selector = self.create_parameter_selector()
+        hbox.addWidget(parameter_selector)
+
+        next_parameter_button = self.create_next_parameter_button()
+        hbox.addWidget(next_parameter_button)
+
+        # Set the maximum height of the combo box to match the buttons
+        button_height = prev_parameter_button.sizeHint().height()
+        parameter_selector.setMaximumHeight(button_height)
+
+        # Set size policies for the buttons and the combo box
+        button_width = 25
+        prev_parameter_button.setFixedSize(button_width, button_height)
+        prev_parameter_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        parameter_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        next_parameter_button.setFixedSize(button_width, button_height)
+        next_parameter_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        return hbox, parameter_selector
+
+    def create_parameter_selector(self):
+        selector = QComboBox()
+
+        for name, func in zip(self.combobox_items.keys(), self.combobox_items.values()):
+            selector.addItem(name, func)
+
+        # Add more items here for other parameters
+        selector.currentIndexChanged.connect(self.draw_selected_parameter_plot)
+        return selector
+
+    def create_prev_parameter_button(self):
+        prev_button = QPushButton('<')
+        prev_button.clicked.connect(self.select_prev_parameter)
+        return prev_button
+
+    def create_next_parameter_button(self):
+        next_button = QPushButton('>')
+        next_button.clicked.connect(self.select_next_parameter)
+        return next_button
+
+    def select_prev_parameter(self):
+        current_index = self.parameter_selector.currentIndex()
+        new_index = (current_index - 1) % self.parameter_selector.count()
+        self.parameter_selector.setCurrentIndex(new_index)
+
+    def select_next_parameter(self):
+        current_index = self.parameter_selector.currentIndex()
+        new_index = (current_index + 1) % self.parameter_selector.count()
+        self.parameter_selector.setCurrentIndex(new_index)
+
     @staticmethod
     def load_file(filename):
         return Sound(filename)
@@ -113,7 +207,7 @@ class MainWindow(QMainWindow):
 
     def draw_plots(self):
         self.draw_plot_sound()
-        self.draw_parameter_plot(self.parameters.volume(self.sound), "Relative volume")
+        self.draw_selected_parameter_plot()
 
     def draw_plot_sound(self):
         self.sound_axis.clear()
@@ -125,6 +219,11 @@ class MainWindow(QMainWindow):
         self.sound_axis.set_title('Sound Wave')
         self.sound_axis.set_ylim((selected_sounds.min() * 0.9, selected_sounds.max() * 1.1))
         self.sound_canvas.draw()
+
+    def draw_selected_parameter_plot(self):
+        selected_index = self.parameter_selector.currentIndex()
+        drawing_func = self.parameter_selector.itemData(selected_index)
+        drawing_func()
 
     def draw_parameter_plot(self, values, title):
         times, _ = self.sound.get_selection_data()
@@ -147,6 +246,6 @@ class MainWindow(QMainWindow):
 
 app = QApplication([])
 window = MainWindow()
-window.setGeometry(100, 100, 1200, 800)
+window.setGeometry(100, 100, 1200, 500)
 window.show()
 app.exec_()
