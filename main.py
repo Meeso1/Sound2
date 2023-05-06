@@ -1,3 +1,4 @@
+import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, \
     QSizePolicy, QSplitter, QComboBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -71,7 +72,13 @@ class MainWindow(QMainWindow):
     def create_combobox_parameters_dict(self):
         parameters = {
             "Volume": lambda: self.draw_parameter_plot(self.parameters.volume(self.sound), "Relative volume"),
-            "Negative volume": lambda: self.draw_parameter_plot(1-self.parameters.volume(self.sound), "Negative volume")
+            "Negative volume": lambda: self.draw_parameter_plot(-self.parameters.volume(self.sound), "Negative volume"),
+            "Frequency Centroid": lambda: self.draw_parameter_plot(self.parameters.frequency_centroid(self.sound), "Frequency centroid"),
+            "Effective Bandwidth": lambda: self.draw_parameter_plot(self.parameters.effective_bandwidth(self.sound), "Effective bandwidth"),
+            "Band Energy": lambda: self.draw_parameter_plot(self.parameters.band_energy(self.sound, 0), "Band energy"),
+            "Band Energy Ratio": lambda: self.draw_parameter_plot(self.parameters.band_energy_ratio(self.sound, 0), "Band energy ratio"),
+            "Spectral Flatness Measure": lambda: self.draw_parameter_plot(self.parameters.spectral_flatness_measure(self.sound, 0), "Spectral flatness measure"),
+            "Spectral Crest Factor": lambda: self.draw_parameter_plot(self.parameters.spectral_crest_factor(self.sound, 0), "Spectral crest factor"),
         }
 
         return parameters
@@ -203,6 +210,7 @@ class MainWindow(QMainWindow):
 
     def on_select(self, start, end):
         self.sound.select(start, end)
+        self.parameters.restart_cache()
         self.draw_plots()
 
     def draw_plots(self):
@@ -226,11 +234,14 @@ class MainWindow(QMainWindow):
         drawing_func()
 
     def draw_parameter_plot(self, values, title):
-        times, _ = self.sound.get_selection_data()
+        times = self.parameters.times_window(self.sound)
 
         self.parameter_axis.clear()
         self.parameter_axis.plot(times, values)
         self.parameter_axis.set_title(title)
+
+        #replace nans with zeros in values
+        values = np.nan_to_num(values)
 
         min_value = values.min()
         max_value = values.max()
@@ -240,6 +251,7 @@ class MainWindow(QMainWindow):
 
     def reset_plots(self):
         self.sound.reset()
+        self.parameters.restart_cache()
         sd.stop()
         self.draw_plots()
 
