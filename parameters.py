@@ -5,11 +5,12 @@ from windows import get_window
 
 DEFAULT_WINDOW_SIZE = 2048
 BANDS = np.array([
-    [0,630],
+    [0, 630],
     [630, 1720],
     [1720, 4400],
     [4400, 11025]
 ])
+
 
 class Parameters:
     def __init__(self, window_size=DEFAULT_WINDOW_SIZE, hop_size=DEFAULT_WINDOW_SIZE // 2, window_type='rectangular'):
@@ -111,9 +112,9 @@ class Parameters:
             freqs.append(np.fft.fft(sound.sound[start:end] * self.window))
         return np.array(np.abs(freqs))
 
-    def calculate_volume(self, sound:Sound):
+    def calculate_volume(self, sound: Sound):
         freq = self.freq(sound, do_slice=False)
-        return 1/freq.shape[1]*np.power(freq,2).sum(axis=1)
+        return 1/freq.shape[1]*np.power(freq, 2).sum(axis=1)
 
     def calculate_frequency_centroid(self, sound: Sound):
         freq = self.freq(sound, do_slice=False)
@@ -131,7 +132,7 @@ class Parameters:
         band_mask = np.logical_and(window_frequencies >= BANDS[band][0], window_frequencies < BANDS[band][1])
         freq = self.freq(sound, do_slice=False)
         power_spectrum = np.power(freq, 2)
-        return power_spectrum[:, band_mask].sum(axis=1) #do not quite sure if this denominator should be here / power_spectrum.sum(axis=1)
+        return power_spectrum[:, band_mask].sum(axis=1) # not quite sure if this denominator should be here / power_spectrum.sum(axis=1)
 
     def calculate_band_energy_ratio(self, sound: Sound, band: int):
         band_energy = self.band_energy(sound, band, do_slice=False)

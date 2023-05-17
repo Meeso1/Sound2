@@ -1,13 +1,15 @@
 import numpy as np
+from PyQt5.QtGui import QIntValidator
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, \
-    QSizePolicy, QSplitter, QComboBox
+    QSizePolicy, QSplitter, QComboBox, QLineEdit, QMessageBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.widgets import SpanSelector
 import sounddevice as sd
 
-from parameters import Parameters
+from parameters import Parameters, DEFAULT_WINDOW_SIZE
 from sound import Sound
+from windows import WINDOW_TYPES
 
 
 class MainWindow(QMainWindow):
@@ -33,6 +35,7 @@ class MainWindow(QMainWindow):
 
         hbox_buttons.addWidget(self.create_reset_button())
         hbox_buttons.addWidget(self.create_play_button())
+        hbox_buttons.addWidget(self.create_stop_button())
         hbox_buttons.addWidget(self.create_open_file_button())
 
         vbox_left.addLayout(sound_hbox)
@@ -72,13 +75,20 @@ class MainWindow(QMainWindow):
     def create_combobox_parameters_dict(self):
         parameters = {
             "Volume": lambda: self.draw_parameter_plot(self.parameters.volume(self.sound), "Relative volume"),
-            "Negative volume": lambda: self.draw_parameter_plot(-self.parameters.volume(self.sound), "Negative volume"),
-            "Frequency Centroid": lambda: self.draw_parameter_plot(self.parameters.frequency_centroid(self.sound), "Frequency centroid"),
-            "Effective Bandwidth": lambda: self.draw_parameter_plot(self.parameters.effective_bandwidth(self.sound), "Effective bandwidth"),
+            "Frequency Centroid": lambda:
+                self.draw_parameter_plot(self.parameters.frequency_centroid(self.sound), "Frequency centroid"),
+            "Effective Bandwidth": lambda:
+                self.draw_parameter_plot(self.parameters.effective_bandwidth(self.sound), "Effective bandwidth"),
             "Band Energy": lambda: self.draw_parameter_plot(self.parameters.band_energy(self.sound, 0), "Band energy"),
-            "Band Energy Ratio": lambda: self.draw_parameter_plot(self.parameters.band_energy_ratio(self.sound, 0), "Band energy ratio"),
-            "Spectral Flatness Measure": lambda: self.draw_parameter_plot(self.parameters.spectral_flatness_measure(self.sound, 0), "Spectral flatness measure"),
-            "Spectral Crest Factor": lambda: self.draw_parameter_plot(self.parameters.spectral_crest_factor(self.sound, 0), "Spectral crest factor"),
+            "Band Energy Ratio": lambda:
+                self.draw_parameter_plot(self.parameters.band_energy_ratio(self.sound, 0), "Band energy ratio"),
+            "Spectral Flatness Measure": lambda:
+                self.draw_parameter_plot(self.parameters.spectral_flatness_measure(self.sound, 0),
+                                         "Spectral flatness measure"),
+            "Spectral Crest Factor": lambda:
+                self.draw_parameter_plot(self.parameters.spectral_crest_factor(self.sound, 0), "Spectral crest factor"),
+            "Spectrogram": lambda:
+                self.draw_heatmap(np.log(self.parameters.freq(self.sound).transpose()), "Spectrogram")
         }
 
         return parameters
@@ -128,7 +138,7 @@ class MainWindow(QMainWindow):
             self.reset_plots()
 
     def create_open_file_button(self):
-        open_file_button = QPushButton('Click to open File Dialog', self)
+        open_file_button = QPushButton('Open file', self)
         open_file_button.clicked.connect(self.select_file)
         return open_file_button
 
@@ -137,22 +147,28 @@ class MainWindow(QMainWindow):
         play_button.clicked.connect(self.play_audio)
         return play_button
 
+    @staticmethod
+    def create_stop_button():
+        stop_button = QPushButton('Stop')
+        stop_button.clicked.connect(lambda: sd.stop())
+        return stop_button
+
     def create_reset_button(self):
         reset_button = QPushButton('Reset')
         reset_button.clicked.connect(self.reset_plots)
         return reset_button
 
     def create_parameter_controls(self):
-        hbox = QHBoxLayout()
+        hbox_top = QHBoxLayout()
 
         prev_parameter_button = self.create_prev_parameter_button()
-        hbox.addWidget(prev_parameter_button)
+        hbox_top.addWidget(prev_parameter_button)
 
         parameter_selector = self.create_parameter_selector()
-        hbox.addWidget(parameter_selector)
+        hbox_top.addWidget(parameter_selector)
 
         next_parameter_button = self.create_next_parameter_button()
-        hbox.addWidget(next_parameter_button)
+        hbox_top.addWidget(next_parameter_button)
 
         # Set the maximum height of the combo box to match the buttons
         button_height = prev_parameter_button.sizeHint().height()
@@ -168,7 +184,13 @@ class MainWindow(QMainWindow):
         next_parameter_button.setFixedSize(button_width, button_height)
         next_parameter_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        return hbox, parameter_selector
+        hbox_bottom = self.create_window_selection_box()
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox_top)
+        vbox.addLayout(hbox_bottom)
+
+        return vbox, parameter_selector
 
     def create_parameter_selector(self):
         selector = QComboBox()
@@ -200,9 +222,64 @@ class MainWindow(QMainWindow):
         new_index = (current_index + 1) % self.parameter_selector.count()
         self.parameter_selector.setCurrentIndex(new_index)
 
+    def create_window_selection_box(self):
+        def set_defaults():
+            window_size_box.setText(str(DEFAULT_WINDOW_SIZE))
+            hop_size_box.setText(str(DEFAULT_WINDOW_SIZE // 2))
+
+        def apply():
+            window_size = int(window_size_box.text())
+            hop_size = int(hop_size_box.text())
+            if hop_size == 0 or window_size == 0:
+                self.show_popup("Window size and hop size cannot be 0")
+                set_defaults()
+                return
+
+            complexity = window_size / hop_size
+            if complexity > 25:
+                self.show_popup("Too many computations")
+                set_defaults()
+                return
+
+            self.parameters.set_window(window_size, hop_size, selector.currentData())
+            self.draw_selected_parameter_plot()
+
+        hbox = QHBoxLayout()
+
+        selector = QComboBox()
+        for name in WINDOW_TYPES:
+            selector.addItem(name, name)
+
+        window_size_box = QLineEdit()
+        window_size_box.setValidator(QIntValidator(1, self.sound.n_frames, window_size_box))
+
+        hop_size_box = QLineEdit()
+        hop_size_box.setValidator(QIntValidator(1, self.sound.n_frames, hop_size_box))
+
+        apply_button = QPushButton('Apply')
+        apply_button.clicked.connect(apply)
+
+        set_defaults()
+
+        hbox.addWidget(selector)
+        hbox.addWidget(window_size_box)
+        hbox.addWidget(hop_size_box)
+        hbox.addWidget(apply_button)
+        return hbox
+
     @staticmethod
     def load_file(filename):
         return Sound(filename)
+
+    @staticmethod
+    def show_popup(message):
+        msg = QMessageBox()
+        msg.setWindowTitle("Error")
+        msg.setText(message)
+        msg.setIcon(QMessageBox.Critical)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setDefaultButton(QMessageBox.Ok)
+        msg.exec_()
 
     def play_audio(self):
         _, sound = self.sound.get_selection_data()
@@ -240,13 +317,19 @@ class MainWindow(QMainWindow):
         self.parameter_axis.plot(times, values)
         self.parameter_axis.set_title(title)
 
-        #replace nans with zeros in values
+        # replace nans with zeros in values
         values = np.nan_to_num(values)
 
-        min_value = values.min()
-        max_value = values.max()
+        min_value = values.min(initial=0)
+        max_value = values.max(initial=0)
         padding = (max_value - min_value) * 0.05 if not max_value == min_value else 1
         self.parameter_axis.set_ylim((min_value - padding, max_value + padding))
+        self.parameter_canvas.draw()
+
+    def draw_heatmap(self, values, title):
+        self.parameter_axis.clear()
+        self.parameter_axis.imshow(values, aspect='auto')
+        self.parameter_axis.set_title(title)
         self.parameter_canvas.draw()
 
     def reset_plots(self):
