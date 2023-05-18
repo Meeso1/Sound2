@@ -367,9 +367,15 @@ class MainWindow(QMainWindow):
         for i in range(len(BANDS)):
             values = np.nan_to_num(values_func(i))
             values = values[np.isfinite(values) & (~np.isnan(values))]
-            self.parameter_axis.plot(times, values)
             min_value = min_value if min_value < values.min(initial=0) else values.min(initial=0)
             max_value = max_value if max_value > values.max(initial=0) else values.max(initial=0)
+
+        for i in range(len(BANDS)):
+            values = np.nan_to_num(values_func(i))
+            if max_value > 10000:
+                values = values + 1
+            self.parameter_axis.plot(times, values)
+
 
         self.parameter_axis.set_title(title)
         if max_value > 10000:
