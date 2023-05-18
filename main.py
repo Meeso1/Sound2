@@ -9,7 +9,7 @@ import sounddevice as sd
 
 from parameters import Parameters, DEFAULT_WINDOW_SIZE
 from sound import Sound
-from windows import WINDOW_TYPES
+from windows import WINDOW_TYPES, get_window
 
 
 class MainWindow(QMainWindow):
@@ -75,6 +75,7 @@ class MainWindow(QMainWindow):
     def create_combobox_parameters_dict(self):
         parameters = {
             "Volume": lambda: self.draw_parameter_plot(self.parameters.volume(self.sound), "Relative volume"),
+            "Frequency Spectrum": lambda: self.draw_parameter_plot(self.parameters.full_sound_spectrum(self.sound), times=self.parameters.sound_frequencies(self.sound), title="Frequency spectrum"),
             "Frequency Centroid": lambda:
                 self.draw_parameter_plot(self.parameters.frequency_centroid(self.sound), "Frequency centroid"),
             "Effective Bandwidth": lambda:
@@ -88,7 +89,7 @@ class MainWindow(QMainWindow):
             "Spectral Crest Factor": lambda:
                 self.draw_parameter_plot(self.parameters.spectral_crest_factor(self.sound, 0), "Spectral crest factor"),
             "Spectrogram": lambda:
-                self.draw_heatmap(np.log(self.parameters.freq(self.sound).transpose()), "Spectrogram")
+                self.draw_heatmap(np.log(self.parameters.freq(self.sound).transpose()), "Spectrogram"),
         }
 
         return parameters
@@ -134,7 +135,7 @@ class MainWindow(QMainWindow):
         filename, _ = QFileDialog.getOpenFileName(self, "Select file to analyze", "",
                                                   "Sound Files (*.wav);;All Files (*)", options=options)
         if filename:
-            self.load_file(filename)
+            self.sound = self.load_file(filename)
             self.reset_plots()
 
     def create_open_file_button(self):
@@ -243,6 +244,7 @@ class MainWindow(QMainWindow):
 
             self.parameters.set_window(window_size, hop_size, selector.currentData())
             self.draw_selected_parameter_plot()
+            self.draw_plot_sound()
 
         hbox = QHBoxLayout()
 
@@ -300,7 +302,7 @@ class MainWindow(QMainWindow):
         if len(selected_times) == 0:
             return
 
-        self.sound_axis.plot(selected_times, selected_sounds)
+        self.sound_axis.plot(selected_times, selected_sounds*get_window(self.parameters.window_type)(selected_sounds.shape[0]))
         self.sound_axis.set_title('Sound Wave')
         self.sound_axis.set_ylim((selected_sounds.min() * 0.9, selected_sounds.max() * 1.1))
         self.sound_canvas.draw()
@@ -310,8 +312,9 @@ class MainWindow(QMainWindow):
         drawing_func = self.parameter_selector.itemData(selected_index)
         drawing_func()
 
-    def draw_parameter_plot(self, values, title):
-        times = self.parameters.times_window(self.sound)
+    def draw_parameter_plot(self, values, title, times=False):
+        if times is False:
+            times = self.parameters.times_window(self.sound)
 
         self.parameter_axis.clear()
         self.parameter_axis.plot(times, values)

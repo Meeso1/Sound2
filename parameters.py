@@ -24,6 +24,7 @@ class Parameters:
         self.cached_times_window = None
         self.cached_frequency_centroid = None
         self.cached_effective_bandwidth = None
+        self.cached_full_sound_spectrum = None
         self.cached_band_energy = {}
         self.cached_band_energy_ratio = {}
         self.cached_spectral_flatness_measure = {}
@@ -102,6 +103,14 @@ class Parameters:
         window_start, window_end = self.get_windowed_indexes(sound)
         return self.cached_band_energy_ratio[band][window_start:window_end] if do_slice else self.cached_band_energy_ratio[band]
 
+    def full_sound_spectrum(self, sound: Sound):
+        if not sound.path == self.cached_sound_name or self.cached_full_sound_spectrum is None:
+            self.cached_sound_name = sound.path
+            self.cached_full_sound_spectrum = self.calculate_full_sound_spectrum(sound)
+
+        window_start, window_end = self.get_windowed_indexes(sound)
+        return self.cached_full_sound_spectrum
+
     def calculate_times(self, sound: Sound):
         return np.array([sound.times[i - self.window_size] for i in range(self.window_size, sound.n_frames, self.hop_size)])
 
@@ -154,6 +163,10 @@ class Parameters:
         freq_dif = BANDS[band][1] - BANDS[band][0] + 1
         return np.argmax(freq_squared, axis=1) * freq_dif / np.sum(freq_squared[:, band_mask], axis=1)
 
+    def calculate_full_sound_spectrum(self, sound: Sound):
+        return np.abs(np.fft.fft(sound.sound * get_window(self.window_type)(sound.n_frames))[:sound.n_frames // 2])
+
+
     def get_windowed_indexes(self, sound: Sound):
         sound_times, _ = sound.get_selection_data()
         times_window = self.times_window(sound, do_slice=False)
@@ -177,6 +190,9 @@ class Parameters:
     def window_frequencies(self, sound: Sound):
         return np.fft.fftfreq(self.window_size, 1 / sound.framerate)[:self.window_size // 2]
 
+    def sound_frequencies(self, sound: Sound):
+        return np.fft.fftfreq(sound.n_frames, 1 / sound.framerate)[:sound.n_frames // 2]
+
     def restart_cache(self):
         self.cached_sound_name = None
         self.cached_volume = None
@@ -184,6 +200,7 @@ class Parameters:
         self.cached_times_window = None
         self.cached_frequency_centroid = None
         self.cached_effective_bandwidth = None
+        self.cached_full_sound_spectrum = None
         self.cached_band_energy = {}
         self.cached_band_energy_ratio = {}
         self.cached_spectral_flatness_measure = {}
