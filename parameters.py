@@ -103,13 +103,13 @@ class Parameters:
         return self.cached_band_energy_ratio[band][window_start:window_end] if do_slice else self.cached_band_energy_ratio[band]
 
     def calculate_times(self, sound: Sound):
-        return np.array([sound.times[i - self.window_size//2] for i in range(self.window_size, sound.n_frames, self.hop_size)])
+        return np.array([sound.times[i - self.window_size] for i in range(self.window_size, sound.n_frames, self.hop_size)])
 
     def calculate_freq(self, sound: Sound):
         freqs = []
         for end in range(self.window_size, len(sound.sound), self.hop_size):
             start = end - self.window_size
-            freqs.append(np.fft.fft(sound.sound[start:end] * self.window))
+            freqs.append(np.fft.fft(sound.sound[start:end] * self.window)[:(self.window_size // 2)])
         return np.array(np.abs(freqs))
 
     def calculate_volume(self, sound: Sound):
@@ -124,7 +124,7 @@ class Parameters:
     def calculate_effective_bandwidth(self, sound: Sound):
         freq = self.freq(sound, do_slice=False)
         fc = self.frequency_centroid(sound, do_slice=False)
-        fc = np.repeat(fc, self.window_size).reshape((fc.shape[0], self.window_size))
+        fc = np.repeat(fc, self.window_size//2).reshape((fc.shape[0], self.window_size//2))
         return (np.power(self.window_frequencies(sound) - fc, 2)* np.power(freq,2)).sum(axis=1)/(np.power(freq,2).sum(axis=1))
 
     def calculate_band_energy(self, sound: Sound, band: int):
@@ -175,7 +175,7 @@ class Parameters:
         self.restart_cache()
 
     def window_frequencies(self, sound: Sound):
-        return np.fft.fftfreq(self.window_size, 1 / sound.framerate)
+        return np.fft.fftfreq(self.window_size, 1 / sound.framerate)[:self.window_size // 2]
 
     def restart_cache(self):
         self.cached_sound_name = None
