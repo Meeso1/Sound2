@@ -83,9 +83,11 @@ class MainWindow(QMainWindow):
                     labels=["Frequency", '']
                 ),
             "Fundamental Frequency": lambda:
-                self.draw_parameter_plot(self.parameters.fundamental_frequency(self.sound), "Fundamental frequency"),
+                self.draw_parameter_plot(self.parameters.fundamental_frequency(self.sound),
+                                         "Fundamental frequency", labels=['Time', 'Frequency']),
             "Frequency Centroid": lambda:
-                self.draw_parameter_plot(self.parameters.frequency_centroid(self.sound), "Frequency centroid"),
+                self.draw_parameter_plot(self.parameters.frequency_centroid(self.sound),
+                                         "Frequency centroid", labels=['Time', 'Frequency']),
             "Effective Bandwidth": lambda:
                 self.draw_parameter_plot(self.parameters.effective_bandwidth(self.sound), "Effective bandwidth"),
             "Band Energy": lambda:
