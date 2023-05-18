@@ -92,18 +92,18 @@ class Parameters:
     def spectral_flatness_measure(self, sound: Sound, band: int, do_slice=True):
         if not sound.path == self.cached_sound_name or band not in self.cached_spectral_flatness_measure:
             self.cached_sound_name = sound.path
-            self.cached_band_energy_ratio[band] = self.calculate_spectral_flatness_measure(sound, band)
+            self.cached_spectral_flatness_measure[band] = self.calculate_spectral_flatness_measure(sound, band)
 
         window_start, window_end = self.get_windowed_indexes(sound)
-        return self.cached_band_energy_ratio[band][window_start:window_end] if do_slice else self.cached_band_energy_ratio[band]
+        return self.cached_spectral_flatness_measure[band][window_start:window_end] if do_slice else self.cached_band_energy_ratio[band]
 
     def spectral_crest_factor(self, sound: Sound, band: int, do_slice=True):
         if not sound.path == self.cached_sound_name or band not in self.cached_spectral_crest_factor:
             self.cached_sound_name = sound.path
-            self.cached_band_energy_ratio[band] = self.calculate_spectral_crest_factor(sound, band)
+            self.cached_spectral_crest_factor[band] = self.calculate_spectral_crest_factor(sound, band)
 
         window_start, window_end = self.get_windowed_indexes(sound)
-        return self.cached_band_energy_ratio[band][window_start:window_end] if do_slice else self.cached_band_energy_ratio[band]
+        return self.cached_spectral_crest_factor[band][window_start:window_end] if do_slice else self.cached_band_energy_ratio[band]
 
     def fundamental_frequency(self, sound: Sound, do_slice=True):
         if not sound.path == self.cached_sound_name or self.cached_fundamental_frequency is None:
