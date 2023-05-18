@@ -366,14 +366,20 @@ class MainWindow(QMainWindow):
         max_value = 0
         for i in range(len(BANDS)):
             values = np.nan_to_num(values_func(i))
+            values = values[np.isfinite(values) & (~np.isnan(values))]
             self.parameter_axis.plot(times, values)
             min_value = min_value if min_value < values.min(initial=0) else values.min(initial=0)
             max_value = max_value if max_value > values.max(initial=0) else values.max(initial=0)
 
         self.parameter_axis.set_title(title)
-
-        padding = (max_value - min_value) * 0.05 if not max_value == min_value else 1
+        if max_value > 10000:
+            max_value, min_value = max_value+1, min_value+1
+            padding =0
+        else:
+            padding = min((max_value - min_value) * 0.05, 10) if not max_value == min_value else 1
         self.parameter_axis.set_ylim((min_value - padding, max_value + padding))
+        if max_value > 10000:
+            self.parameter_axis.set_yscale('log')
         self.parameter_axis.set_ylabel('')
         self.parameter_axis.set_xlabel("Time")
         self.parameter_axis.legend([f'Band {band[0]}-{band[1]}' for band in BANDS])
