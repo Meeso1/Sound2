@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         parameters = {
             "Volume": lambda: self.draw_parameter_plot(self.parameters.volume(self.sound), "Relative volume"),
             "Frequency Spectrum": lambda: self.draw_parameter_plot(self.parameters.full_sound_spectrum(self.sound), times=self.parameters.sound_frequencies(self.sound), title="Frequency spectrum"),
+            "Fundamental Frequency": lambda: self.draw_parameter_plot(self.parameters.fundamental_frequency(self.sound), "Fundamental frequency"),
             "Frequency Centroid": lambda:
                 self.draw_parameter_plot(self.parameters.frequency_centroid(self.sound), "Frequency centroid"),
             "Effective Bandwidth": lambda:

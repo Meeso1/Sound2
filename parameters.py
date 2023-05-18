@@ -1,5 +1,6 @@
 import numpy as np
 
+from cepstrum import calculate_fundamental_frequency_cepstrum
 from sound import Sound
 from windows import get_window
 
@@ -25,6 +26,7 @@ class Parameters:
         self.cached_frequency_centroid = None
         self.cached_effective_bandwidth = None
         self.cached_full_sound_spectrum = None
+        self.cached_fundamental_frequency = None
         self.cached_band_energy = {}
         self.cached_band_energy_ratio = {}
         self.cached_spectral_flatness_measure = {}
@@ -103,6 +105,14 @@ class Parameters:
         window_start, window_end = self.get_windowed_indexes(sound)
         return self.cached_band_energy_ratio[band][window_start:window_end] if do_slice else self.cached_band_energy_ratio[band]
 
+    def fundamental_frequency(self, sound: Sound, do_slice=True):
+        if not sound.path == self.cached_sound_name or self.cached_fundamental_frequency is None:
+            self.cached_sound_name = sound.path
+            self.cached_fundamental_frequency = self.calculate_fundamental_frequency(sound)
+
+        window_start, window_end = self.get_windowed_indexes(sound)
+        return self.cached_fundamental_frequency[window_start:window_end] if do_slice else self.cached_fundamental_frequency
+
     def full_sound_spectrum(self, sound: Sound):
         if not sound.path == self.cached_sound_name or self.cached_full_sound_spectrum is None:
             self.cached_sound_name = sound.path
@@ -163,6 +173,12 @@ class Parameters:
         freq_dif = BANDS[band][1] - BANDS[band][0] + 1
         return np.argmax(freq_squared, axis=1) * freq_dif / np.sum(freq_squared[:, band_mask], axis=1)
 
+    def calculate_fundamental_frequency(self, sound: Sound):
+        fund_freqs= []
+        for end in range(self.window_size, len(sound.sound), self.hop_size):
+            fund_freqs.append(calculate_fundamental_frequency_cepstrum(sound.sound[end-self.window_size:end]*self.window, sound.framerate))
+        return np.array(fund_freqs)
+
     def calculate_full_sound_spectrum(self, sound: Sound):
         return np.abs(np.fft.fft(sound.sound * get_window(self.window_type)(sound.n_frames))[:sound.n_frames // 2])
 
@@ -201,6 +217,7 @@ class Parameters:
         self.cached_frequency_centroid = None
         self.cached_effective_bandwidth = None
         self.cached_full_sound_spectrum = None
+        self.cached_fundamental_frequency = None
         self.cached_band_energy = {}
         self.cached_band_energy_ratio = {}
         self.cached_spectral_flatness_measure = {}
