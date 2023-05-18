@@ -7,7 +7,7 @@ from matplotlib.figure import Figure
 from matplotlib.widgets import SpanSelector
 import sounddevice as sd
 
-from parameters import Parameters, DEFAULT_WINDOW_SIZE
+from parameters import Parameters, DEFAULT_WINDOW_SIZE, BANDS
 from sound import Sound
 from windows import WINDOW_TYPES, get_window
 
@@ -75,22 +75,35 @@ class MainWindow(QMainWindow):
     def create_combobox_parameters_dict(self):
         parameters = {
             "Volume": lambda: self.draw_parameter_plot(self.parameters.volume(self.sound), "Relative volume"),
-            "Frequency Spectrum": lambda: self.draw_parameter_plot(self.parameters.full_sound_spectrum(self.sound), times=self.parameters.sound_frequencies(self.sound), title="Frequency spectrum"),
-            "Fundamental Frequency": lambda: self.draw_parameter_plot(self.parameters.fundamental_frequency(self.sound), "Fundamental frequency"),
+            "Frequency Spectrum": lambda:
+                self.draw_parameter_plot(
+                    self.parameters.full_sound_spectrum(self.sound),
+                    times=self.parameters.sound_frequencies(self.sound),
+                    title="Frequency spectrum",
+                    labels=["Frequency", '']
+                ),
+            "Fundamental Frequency": lambda:
+                self.draw_parameter_plot(self.parameters.fundamental_frequency(self.sound), "Fundamental frequency"),
             "Frequency Centroid": lambda:
                 self.draw_parameter_plot(self.parameters.frequency_centroid(self.sound), "Frequency centroid"),
             "Effective Bandwidth": lambda:
                 self.draw_parameter_plot(self.parameters.effective_bandwidth(self.sound), "Effective bandwidth"),
-            "Band Energy": lambda: self.draw_parameter_plot(self.parameters.band_energy(self.sound, 0), "Band energy"),
+            "Band Energy": lambda:
+                self.draw_band_parameter_plot(lambda b: self.parameters.band_energy(self.sound, b), "Band energy"),
             "Band Energy Ratio": lambda:
-                self.draw_parameter_plot(self.parameters.band_energy_ratio(self.sound, 0), "Band energy ratio"),
+                self.draw_band_parameter_plot(lambda b:
+                                              self.parameters.band_energy_ratio(self.sound, b), "Band energy ratio"),
             "Spectral Flatness Measure": lambda:
-                self.draw_parameter_plot(self.parameters.spectral_flatness_measure(self.sound, 0),
-                                         "Spectral flatness measure"),
+                self.draw_band_parameter_plot(lambda b: self.parameters.spectral_flatness_measure(self.sound, b),
+                                              "Spectral flatness measure"),
             "Spectral Crest Factor": lambda:
-                self.draw_parameter_plot(self.parameters.spectral_crest_factor(self.sound, 0), "Spectral crest factor"),
+                self.draw_band_parameter_plot(
+                    lambda b: self.parameters.spectral_crest_factor(self.sound, b), "Spectral crest factor"),
             "Spectrogram": lambda:
-                self.draw_heatmap(np.log(self.parameters.freq(self.sound).transpose()), "Spectrogram"),
+                self.draw_spectrogram(
+                    np.log(np.flipud(self.parameters.freq(self.sound).transpose())),
+                    self.parameters.times_window(self.sound)
+                ),
         }
 
         return parameters
@@ -313,7 +326,10 @@ class MainWindow(QMainWindow):
         drawing_func = self.parameter_selector.itemData(selected_index)
         drawing_func()
 
-    def draw_parameter_plot(self, values, title, times=False):
+    def draw_parameter_plot(self, values, title, times=False, labels=None):
+        if labels is None:
+            labels = ['Time', '']
+
         if times is False:
             times = self.parameters.times_window(self.sound)
 
@@ -328,12 +344,37 @@ class MainWindow(QMainWindow):
         max_value = values.max(initial=0)
         padding = (max_value - min_value) * 0.05 if not max_value == min_value else 1
         self.parameter_axis.set_ylim((min_value - padding, max_value + padding))
+        self.parameter_axis.set_ylabel(labels[1])
+        self.parameter_axis.set_xlabel(labels[0])
         self.parameter_canvas.draw()
 
-    def draw_heatmap(self, values, title):
+    def draw_spectrogram(self, values, times):
         self.parameter_axis.clear()
-        self.parameter_axis.imshow(values, aspect='auto')
+        self.parameter_axis.imshow(values, aspect='auto', extent=[times[0], times[-1], 0, self.parameters.window_size])
+        self.parameter_axis.set_title("Spectrogram")
+        self.parameter_axis.set_xlabel('Time')
+        self.parameter_axis.set_ylabel('Frequency')
+        self.parameter_canvas.draw()
+
+    def draw_band_parameter_plot(self, values_func, title):
+        self.parameter_axis.clear()
+        times = self.parameters.times_window(self.sound)
+
+        min_value = 0
+        max_value = 0
+        for i in range(len(BANDS)):
+            values = np.nan_to_num(values_func(i))
+            self.parameter_axis.plot(times, values)
+            min_value = min_value if min_value < values.min(initial=0) else values.min(initial=0)
+            max_value = max_value if max_value > values.max(initial=0) else values.max(initial=0)
+
         self.parameter_axis.set_title(title)
+
+        padding = (max_value - min_value) * 0.05 if not max_value == min_value else 1
+        self.parameter_axis.set_ylim((min_value - padding, max_value + padding))
+        self.parameter_axis.set_ylabel('')
+        self.parameter_axis.set_xlabel("Time")
+        self.parameter_axis.legend([f'Band {band[0]}-{band[1]}' for band in BANDS])
         self.parameter_canvas.draw()
 
     def reset_plots(self):
